@@ -21,6 +21,10 @@ npm run check
 
 `npm` is only used as a script runner; runtime dependencies are built into Node.js. The SQLite module ships with supported Node releases, though Node may mark it experimental.
 
+## Container
+
+Build with `docker build -t nexora-youtube-ai .`. Run behind a TLS reverse proxy, pass `NEXORA_ADMIN_USERNAME` and `NEXORA_ADMIN_PASSWORD` through the platform's protected runtime secret store, and mount durable storage at `/var/lib/nexora`. The container runs as the unprivileged `node` user and exposes `/api/health`. Do not expose the container port directly to the public internet. SQLite and session storage are single-instance only; this image does not turn the application into a horizontally scalable multi-user service.
+
 ## Working modules
 
 - Dashboard and capability ledger backed by persisted data.

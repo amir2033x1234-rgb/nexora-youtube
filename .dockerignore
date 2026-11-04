@@ -1,0 +1,15 @@
+.git
+.github
+.env
+.env.*
+!.env.example
+data
+secrets
+tokens.json
+token.json
+credentials.json
+client_secret*.json
+node_modules
+coverage
+test
+test-data
