@@ -27,6 +27,29 @@ test('publishing consent is a separate explicit OAuth mode',async t=>{
   const url=new URL(yt.start('publish')); assert.match(url.searchParams.get('scope'),/youtube\.upload/); assert.throws(()=>yt.start('anything'),/mode must be/);
 });
 
+test('channel management scope is optional and playlist creation and metadata updates require explicit approval',async t=>{
+  const dir=await mkdtemp(path.join(os.tmpdir(),'nexora-oauth-manage-'));
+  const store=createStore(dir); t.after(async()=>{store.close();await rm(dir,{recursive:true,force:true})});
+  const key=Buffer.alloc(32,6).toString('base64'); const calls=[];
+  const fetchImpl=async(url,options={})=>{
+    calls.push({url:String(url),method:options.method||'GET',body:options.body});
+    if(url==='https://oauth2.googleapis.com/token')return new Response(JSON.stringify({access_token:'manage-access',refresh_token:'manage-refresh',expires_in:3600,scope:'https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/yt-analytics.readonly https://www.googleapis.com/auth/youtube'}),{status:200});
+    if(String(url).includes('/videos?part=snippet&id='))return new Response(JSON.stringify({items:[{id:'abcdefghijk',snippet:{title:'Old',description:'Keep intact',categoryId:'27',tags:['old']}}]}),{status:200});
+    if(String(url).includes('/playlists?part=snippet,status'))return new Response(JSON.stringify({id:'playlist123'}),{status:200});
+    if(String(url).includes('/videos?part=snippet'))return new Response(JSON.stringify({id:'abcdefghijk'}),{status:200});
+    throw new Error(`Unexpected URL ${url}`);
+  };
+  const yt=createYouTubeIntegration({store,env:{NEXORA_GOOGLE_CLIENT_ID:'client',NEXORA_TOKEN_ENCRYPTION_KEY:key},fetchImpl});
+  const read=new URL(yt.start('read'));assert.doesNotMatch(read.searchParams.get('scope'),/auth\/youtube(?:\s|$)/);
+  const auth=new URL(yt.start('manage'));assert.match(auth.searchParams.get('scope'),/auth\/youtube(?:\s|$)/);await yt.callback({code:'once',state:auth.searchParams.get('state')});assert.equal(yt.status().manageAuthorized,true);
+  await assert.rejects(()=>yt.createPlaylist({title:'Approved later'}),/Explicit approval/);
+  await assert.rejects(()=>yt.createPlaylist({title:'Public no second approval',privacyStatus:'public',explicitApproval:true}),/separate approval/);
+  const playlist=await yt.createPlaylist({title:'Private series',explicitApproval:true});assert.equal(playlist.id,'playlist123');
+  await assert.rejects(()=>yt.updateVideo({videoId:'abcdefghijk',title:'New'}),/Explicit approval/);
+  const updated=await yt.updateVideo({videoId:'abcdefghijk',title:'New title',explicitApproval:true});assert.equal(updated.id,'abcdefghijk');
+  const write=calls.find(x=>x.method==='PUT');const body=JSON.parse(write.body);assert.equal(body.snippet.categoryId,'27');assert.equal(body.snippet.description,'Keep intact');assert.deepEqual(body.snippet.tags,['old']);
+});
+
 test('upload requires explicit approval, exact licensed export, quality, upload scope, and defaults private',async t=>{
   const dir=await mkdtemp(path.join(os.tmpdir(),'nexora-upload-'));
   const store=createStore(dir); t.after(async()=>{store.close();await rm(dir,{recursive:true,force:true})});

@@ -5,6 +5,7 @@ import path from 'node:path';
 
 const READ_SCOPES = ['https://www.googleapis.com/auth/youtube.readonly','https://www.googleapis.com/auth/yt-analytics.readonly'];
 const UPLOAD_SCOPE = 'https://www.googleapis.com/auth/youtube.upload';
+const MANAGE_SCOPE = 'https://www.googleapis.com/auth/youtube';
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const API = 'https://www.googleapis.com/youtube/v3';
@@ -30,15 +31,15 @@ export function createYouTubeIntegration({ store, env = process.env, port = 3000
   function saveTokens(tokens) { store.put('secrets',{id:'youtube_tokens',box:encrypt(tokens),updatedAt:new Date().toISOString()}); }
   function status() {
     const tokens=readTokens();
-    return { configured, connected:Boolean(tokens?.refresh_token), uploadAuthorized:Boolean(tokens?.refresh_token&&tokens.scope.split(' ').includes(UPLOAD_SCOPE)), clientIdConfigured:Boolean(env.NEXORA_GOOGLE_CLIENT_ID), encryptionKeyConfigured:Boolean(key), redirectUri, scope:tokens?.scope||null, mode:tokens?.mode||null, note:configured?'OAuth uses loopback redirect, one-time state, PKCE and encrypted token storage.':'Add client ID and a 32-byte encryption key through protected environment settings.' };
+    return { configured, connected:Boolean(tokens?.refresh_token), uploadAuthorized:Boolean(tokens?.refresh_token&&tokens.scope.split(' ').includes(UPLOAD_SCOPE)), manageAuthorized:Boolean(tokens?.refresh_token&&tokens.scope.split(' ').includes(MANAGE_SCOPE)),clientIdConfigured:Boolean(env.NEXORA_GOOGLE_CLIENT_ID),encryptionKeyConfigured:Boolean(key),redirectUri,scope:tokens?.scope||null,mode:tokens?.mode||null,note:configured?'OAuth uses one-time state, PKCE and encrypted token storage.':'Add client ID and a 32-byte encryption key through protected environment settings.' };
   }
   function start(mode='read') {
     if(!configured||!key) throw new Error('YouTube OAuth is not configured. Add NEXORA_GOOGLE_CLIENT_ID and NEXORA_TOKEN_ENCRYPTION_KEY in the protected environment.');
-    if(!['read','publish'].includes(mode)) throw new Error('mode must be read or publish');
+    if(!['read','manage','publish'].includes(mode)) throw new Error('mode must be read, manage, or publish');
     const state=b64url(randomBytes(32)); const verifier=b64url(randomBytes(48)); const challenge=b64url(createHash('sha256').update(verifier).digest());
     pending.set(state,{verifier,mode,createdAt:Date.now()});
     for(const [k,v] of pending) if(Date.now()-v.createdAt>10*60*1000) pending.delete(k);
-    const query=new URLSearchParams({client_id:env.NEXORA_GOOGLE_CLIENT_ID,redirect_uri:redirectUri,response_type:'code',scope:[...READ_SCOPES,...(mode==='publish'?[UPLOAD_SCOPE]:[])].join(' '),access_type:'offline',prompt:'consent',state,code_challenge:challenge,code_challenge_method:'S256'});
+    const query=new URLSearchParams({client_id:env.NEXORA_GOOGLE_CLIENT_ID,redirect_uri:redirectUri,response_type:'code',scope:[...READ_SCOPES,...(mode==='manage'?[MANAGE_SCOPE]:[]),...(mode==='publish'?[UPLOAD_SCOPE]:[])].join(' '),access_type:'offline',prompt:'consent',state,code_challenge:challenge,code_challenge_method:'S256'});
     return `${AUTH_URL}?${query}`;
   }
   async function callback({code,state,error}) {
@@ -74,6 +75,27 @@ export function createYouTubeIntegration({ store, env = process.env, port = 3000
     const q=new URLSearchParams({part:'snippet,contentDetails,status',playlistId:uploads,maxResults:String(Math.max(1,Math.min(50,Number(maxResults)||25)))}); if(pageToken) q.set('pageToken',pageToken);
     const data=await api(`${API}/playlistItems?${q}`); return {items:(data.items||[]).map(x=>({id:x.contentDetails?.videoId,title:x.snippet?.title,publishedAt:x.contentDetails?.videoPublishedAt||x.snippet?.publishedAt,thumbnail:x.snippet?.thumbnails?.medium?.url})),nextPageToken:data.nextPageToken||null,channel:channels[0]};
   }
+  async function playlists(pageToken='') {
+    const q=new URLSearchParams({part:'snippet,status',mine:'true',maxResults:'50'});if(pageToken)q.set('pageToken',pageToken);
+    const data=await api(`${API}/playlists?${q}`);return {items:data.items||[],nextPageToken:data.nextPageToken||null};
+  }
+  async function createPlaylist({title,description='',privacyStatus='private',explicitApproval=false,publicVisibilityApproval=false}) {
+    if(explicitApproval!==true)throw new Error('Explicit approval is required before creating a playlist.');
+    if(!String(title||'').trim()||String(title).length>150)throw new Error('Playlist title is required and must be 150 characters or fewer.');
+    if(!['private','unlisted','public'].includes(privacyStatus))throw new Error('privacyStatus must be private, unlisted, or public.');
+    if(privacyStatus==='public'&&publicVisibilityApproval!==true)throw new Error('Public playlist visibility requires separate approval.');
+    return api(`${API}/playlists?part=snippet,status`,MANAGE_SCOPE,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({snippet:{title:String(title).trim(),description:String(description).slice(0,5000)},status:{privacyStatus}})});
+  }
+  async function updateVideo({videoId,title,description,tags,explicitApproval=false}) {
+    if(explicitApproval!==true)throw new Error('Explicit approval is required before changing YouTube metadata.');
+    if(!/^[A-Za-z0-9_-]{6,20}$/.test(String(videoId||'')))throw new Error('A valid YouTube video ID is required.');
+    const current=await api(`${API}/videos?part=snippet&id=${encodeURIComponent(videoId)}`);const existing=current.items?.[0];if(!existing)throw new Error('Video was not found on the authorized channel.');
+    const nextTitle=String(title??existing.snippet?.title??'').trim();const nextDescription=String(description??existing.snippet?.description??'');const nextTags=Array.isArray(tags)?tags.map(x=>String(x).slice(0,100)).slice(0,30):existing.snippet?.tags;
+    if(!nextTitle||nextTitle.length>100||/[<>]/.test(nextTitle))throw new Error('Video title must be 1–100 characters and cannot contain < or >.');
+    if(Buffer.byteLength(nextDescription,'utf8')>5000||/[<>]/.test(nextDescription))throw new Error('Video description must be at most 5000 UTF-8 bytes and cannot contain < or >.');
+    const snippet={title:nextTitle,description:nextDescription,categoryId:existing.snippet?.categoryId};if(nextTags)snippet.tags=nextTags;
+    return api(`${API}/videos?part=snippet`,MANAGE_SCOPE,{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({id:videoId,snippet})});
+  }
   async function analytics({startDate,endDate}) {
     if(!/^\d{4}-\d{2}-\d{2}$/.test(startDate||'')||!/^\d{4}-\d{2}-\d{2}$/.test(endDate||'')) throw new Error('startDate and endDate must use YYYY-MM-DD.');
     const q=new URLSearchParams({ids:'channel==MINE',startDate,endDate,metrics:'views,estimatedMinutesWatched,averageViewDuration,subscribersGained',dimensions:'day',sort:'day'});
@@ -105,5 +127,5 @@ export function createYouTubeIntegration({ store, env = process.env, port = 3000
     return {videoId:result.id,url:result.id?`https://www.youtube.com/watch?v=${encodeURIComponent(result.id)}`:null,privacyStatus,uploaded:true,approvalRecorded:true,qualityScore:score.score,createdAt:new Date().toISOString()};
   }
   async function disconnect() { store.delete('secrets','youtube_tokens'); return {connected:false}; }
-  return { status, start, callback, channel, videos, analytics, popular, upload, disconnect, accessToken, api, scopes:{read:READ_SCOPES,upload:UPLOAD_SCOPE} };
+  return { status, start, callback, channel, videos, playlists, createPlaylist, updateVideo, analytics, popular, upload, disconnect, accessToken, api, scopes:{read:READ_SCOPES,manage:MANAGE_SCOPE,upload:UPLOAD_SCOPE} };
 }
