@@ -27,8 +27,8 @@ Build with `docker build -t nexora-youtube-ai .`. Run behind a TLS reverse proxy
 
 ## Working modules
 
-- Dashboard and capability ledger backed by persisted data.
-- Multi-channel configuration and content calendar.
+- Dashboard and capability ledger backed by persisted data, plus a searchable content library for saved records.
+- Multi-channel configuration, content calendar, and channel-scoped API lists; use `?channelId=<id>` for ideas, scripts, jobs, analytics, and calendar records.
 - Google Trends “Trending now” RSS radar with region selection, 10-minute cache, saved evidence, related news links, freshness/search-interest signals, and explicit unknown values for YouTube competition/opportunity. It is not a YouTube demand feed or virality forecast.
 - Opt-in YouTube competitor search through the official Data API, with view-velocity samples and a hard five-search daily app limit; no request runs until clicked and results are not presented as market-wide forecasts.
 - Structured script outlines (deterministic templates, no language model call).
@@ -36,7 +36,7 @@ Build with `docker build -t nexora-youtube-ai .`. Run behind a TLS reverse proxy
 - Transcript-to-SRT conversion with estimated timing unless timestamps are supplied.
 - Rule-based metadata drafts and editable 1280×720 SVG title-card templates.
 - Production job queue with documented media-rights checks, quality gate, daily quota, and bounded retry.
-- Optional FFmpeg still-image renderer for landscape/vertical videos with licensed images and supplied audio; disabled until the local binary is available.
+- Optional FFmpeg still-image renderer for landscape/vertical videos with licensed images and supplied audio; disabled until a cloud-hosted render runtime is configured.
 - User-entered analytics records.
 - Optional official YouTube read integration: Desktop OAuth with PKCE/state, refresh tokens encrypted at rest, channel/videos, Analytics reports, and the official `mostPopular` chart.
 - Optional Ollama adapter: structured AI script drafts through an explicitly configured endpoint; no model is downloaded or invoked automatically. To honor the no-laptop-processing rule, only connect a separately approved cloud-hosted provider with a verified zero-cost quota; leave it disabled otherwise.
@@ -50,7 +50,7 @@ The dashboard and `/api/status` expose the per-module status and explain limitat
 
 | Capability | Status | Limit |
 |---|---|---|
-| Content intelligence, strategy calendar, quotas, recovery, quality scoring, multi-channel, dashboard | IMPLEMENTED | Local foundation; deploy with protected durable storage for shared/cloud use. |
+| Content intelligence, strategy calendar, quotas, recovery, quality scoring, multi-channel, dashboard, searchable library | IMPLEMENTED | Local foundation; deploy with protected durable storage for shared/cloud use. |
 | Trend research | PARTIAL | Google Trends supplies current Google Search signals and related news. YouTube competition, audience fit, opportunity, and forecast are not inferred without evidence. |
 | YouTube competitor sample | PROVIDER_REQUIRED until read OAuth is connected; then UNTESTED | Official public video search sample, capped to five user-initiated searches per UTC day. A sample is not total competition or audience demand. |
 | Fact checking, subtitles, thumbnails, SEO, production orchestration | PARTIAL | User-input rules/templates; source verification, speech recognition, generated imagery, and full production remain disconnected. |
@@ -69,10 +69,11 @@ Never commit `.env`, OAuth client files, tokens, or credentials. `.gitignore` ex
 
 AI inference is optional and disabled until both `NEXORA_OLLAMA_URL` and `NEXORA_OLLAMA_MODEL` are configured. The adapter rejects HTTP, loopback, and localhost endpoints so project inference cannot run on the user's laptop. Only configure a remote HTTPS provider after its zero-cost quota and data handling are verified; otherwise leave it disabled. Model output is a draft and is not automatically fact-checked. No hosted AI endpoint or paid service is called by the app by default.
 
-The Studio → Render video tool uses FFmpeg if installed. Put licensed source images and audio in `data/assets` (or configure `NEXORA_ASSET_DIR`), document each license and its proof, then provide slide durations and a landscape or vertical layout. Rendered MP4s go to `data/exports` and can be submitted to the gated YouTube upload form. FFmpeg was not installed in the build environment, so the renderer was verified with a mocked process and the real media encode remains untested.
+The Studio → Render video route is blocked on loopback/local installations to honor the no-laptop-processing requirement. On a protected cloud host only, configure FFmpeg and persistent asset/export directories, use licensed source images and audio with documented proof, and select slide durations plus landscape or vertical layout. The real media encode remains untested until that cloud runtime is configured.
 
 The dependency-free Node HTTP service uses SQLite for a single-instance prototype and static browser UI. The local admin login is suitable for a single-instance protected installation, not a multi-user identity system. For a cloud-first multi-user launch, the next required milestone is managed relational storage, durable sessions, object storage with lifecycle limits, background workers, and deployment/backup automation—all selected from genuinely free allowances and rechecked before use. Then add provider adapters behind interfaces: validated public trend sources; an optional no-cost model endpoint with explicit quota tracking; speech/media tools that operate only on licensed assets; and YouTube APIs. Do not add paid services without explicit approval. Every integration must have provider-specific tests and a clear `PROVIDER_REQUIRED`/`UNTESTED` status until exercised.
 
 ## Current deployment boundary
 
 This milestone is source-verified and locally testable. It has not been deployed to Google Cloud; no cloud project or API state was queried. No real OAuth handshake, live channel API access, AI inference, image/audio/video generation, YouTube analytics fetch, upload, or device-specific browser verification has been performed.
+
