@@ -47,7 +47,7 @@ Build with `docker build -t nexora-youtube-ai .`. Run behind a TLS reverse proxy
 
 ### Worker handoff
 
-`GET /api/jobs?channelId=<id>` lists queued work for a channel. A trusted worker can set a queued job to `running`, then to `completed` or `failed` with `POST /api/jobs/<job-id>/status`; only failed jobs can be retried, up to three times. These protected endpoints define the state contract only. NEXORA does not include or automatically start a cloud worker.
+Set a random `NEXORA_WORKER_TOKEN` of at least 32 bytes in the protected cloud secret store. A worker claims work with `POST /api/worker/jobs/claim` and `Authorization: Bearer <token>`, then heartbeats at `POST /api/worker/jobs/<job-id>/heartbeat` and reports `completed` or `failed` to `/status` using its lease ID. Claims are exclusive, leases last two minutes by default, and expired leases are requeued automatically with at most three retries. `GET /api/jobs?channelId=<id>` remains the admin listing endpoint. NEXORA provides this worker contract and recovery loop; you must still deploy a separate worker process to actually render media.
 ## Capability status
 
 The dashboard and `/api/status` expose the per-module status and explain limitations. `IMPLEMENTED` describes local functionality only. It does not imply connected provider or cloud runtime verification.

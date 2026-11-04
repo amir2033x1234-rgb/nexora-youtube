@@ -23,3 +23,20 @@ test('SQLite records survive reopening and keep channel-scoped records',async t=
   assert.equal(second.countSince('trends','2026-01-01T00:00:00.000Z'),2);
   second.close();
 });
+
+test('worker claims are exclusive and expired leases recover with a bounded retry count',async t=>{
+  const dir=await mkdtemp(path.join(os.tmpdir(),'nexora-worker-'));
+  const store=createStore(dir);t.after(async()=>{store.close();await rm(dir,{recursive:true,force:true})});
+  const start=new Date('2026-01-01T00:00:00.000Z');
+  store.put('jobs',{id:'job-a',channelId:'default',status:'queued',stage:'queued',retryCount:0,createdAt:start.toISOString()});
+  const claimed=store.claimNextJob('worker-a',15_000,start);
+  assert.equal(claimed.status,'running');assert.equal(claimed.lease.workerId,'worker-a');
+  assert.equal(store.claimNextJob('worker-b',15_000,start),null);
+  let time=new Date(start.getTime()+15_001);
+  let recovered=store.recoverExpiredJobs(time);assert.equal(recovered[0].status,'queued');assert.equal(recovered[0].retryCount,1);assert.equal(recovered[0].lease,null);
+  for(let retry=0;retry<3;retry++){
+    const job=store.claimNextJob(`worker-${retry}`,15_000,time);assert.ok(job);
+    time=new Date(time.getTime()+15_001);recovered=store.recoverExpiredJobs(time);
+  }
+  assert.equal(recovered[0].status,'failed');assert.equal(recovered[0].retryCount,3);
+});

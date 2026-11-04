@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 test('HTTP app persists records, enforces rights and never publishes',async t=>{
   const dir=await mkdtemp(path.join(os.tmpdir(),'nexora-test-')); const port=32000+Math.floor(Math.random()*2000);
   const projectRoot=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
-  const child=spawn(process.execPath,['server.mjs'],{cwd:projectRoot,env:{...process.env,HOST:'127.0.0.1',PORT:String(port),NEXORA_DATA_DIR:dir,NEXORA_DAILY_JOB_LIMIT:'1',NEXORA_ADMIN_USERNAME:'owner',NEXORA_ADMIN_PASSWORD:'test-password-only'},stdio:['ignore','ignore','pipe']});
+  const child=spawn(process.execPath,['server.mjs'],{cwd:projectRoot,env:{...process.env,HOST:'127.0.0.1',PORT:String(port),NEXORA_DATA_DIR:dir,NEXORA_DAILY_JOB_LIMIT:'1',NEXORA_ADMIN_USERNAME:'owner',NEXORA_ADMIN_PASSWORD:'test-password-only',NEXORA_WORKER_TOKEN:'test-only-worker-token-for-integration-tests-012345'},stdio:['ignore','ignore','pipe']});
   let startupError=''; child.stderr.setEncoding('utf8'); child.stderr.on('data',chunk=>startupError+=chunk); child.on('error',error=>startupError+=`${error.code||''} ${error.message}`);
   t.after(async()=>{child.kill('SIGTERM');await new Promise(r=>setTimeout(r,100));await rm(dir,{recursive:true,force:true})});
   const base=`http://127.0.0.1:${port}`; let ready=false, connectError='';
@@ -27,11 +27,16 @@ test('HTTP app persists records, enforces rights and never publishes',async t=>{
   const body={topic:'Test topic',channelId:'default',assets:[{url:'licensed',license:'CC BY',proof:'license page',commercialUse:true}],quality:Object.fromEntries(['originality','storytelling','visualQuality','audioQuality','editingQuality','factualAccuracy','subtitleQuality','thumbnailQuality','audienceValue','copyrightCompliance'].map((k,i)=>[k,i===9?100:90]))};
   const queued=await secureFetch(`${base}/api/jobs`,{method:'POST',headers:{'x-csrf-token':csrfToken},body:JSON.stringify(body)});assert.equal(queued.status,202);const job=await queued.json();
   const prematureRetry=await secureFetch(`${base}/api/jobs/${job.id}/retry`,{method:'POST',headers:{'x-csrf-token':csrfToken}});assert.equal(prematureRetry.status,409);
-  const failed=await secureFetch(`${base}/api/jobs/${job.id}/status`,{method:'POST',headers:{'x-csrf-token':csrfToken},body:JSON.stringify({status:'failed',reason:'provider timeout'})});assert.equal(failed.status,200);assert.equal((await failed.json()).status,'failed');
+  const workerToken='test-only-worker-token-for-integration-tests-012345';const workerCall=(route,data)=>fetch(`${base}${route}`,{method:'POST',headers:{authorization:`Bearer ${workerToken}`,'content-type':'application/json'},body:JSON.stringify(data)});
+  const unauthorizedWorker=await secureFetch(`${base}/api/worker/jobs/claim`,{method:'POST',body:JSON.stringify({workerId:'ci-worker'})});assert.equal(unauthorizedWorker.status,401);
+  const firstClaim=await workerCall('/api/worker/jobs/claim',{workerId:'ci-worker',leaseMs:15000});assert.equal(firstClaim.status,200);const claimed=(await firstClaim.json()).job;assert.equal(claimed.status,'running');assert.ok(claimed.lease.id);
+  const wrongLease=await workerCall(`/api/worker/jobs/${job.id}/status`,{leaseId:'stale',status:'completed'});assert.equal(wrongLease.status,409);
+  const heartbeat=await workerCall(`/api/worker/jobs/${job.id}/heartbeat`,{leaseId:claimed.lease.id,leaseMs:30000});assert.equal(heartbeat.status,200);
+  const failed=await workerCall(`/api/worker/jobs/${job.id}/status`,{leaseId:claimed.lease.id,status:'failed',reason:'provider timeout'});assert.equal(failed.status,200);assert.equal((await failed.json()).status,'failed');
   const retry=await secureFetch(`${base}/api/jobs/${job.id}/retry`,{method:'POST',headers:{'x-csrf-token':csrfToken}});assert.equal(retry.status,202);
   const duplicateRetry=await secureFetch(`${base}/api/jobs/${job.id}/retry`,{method:'POST',headers:{'x-csrf-token':csrfToken}});assert.equal(duplicateRetry.status,409);
-  const running=await secureFetch(`${base}/api/jobs/${job.id}/status`,{method:'POST',headers:{'x-csrf-token':csrfToken},body:JSON.stringify({status:'running'})});assert.equal(running.status,200);
-  const completed=await secureFetch(`${base}/api/jobs/${job.id}/status`,{method:'POST',headers:{'x-csrf-token':csrfToken},body:JSON.stringify({status:'completed'})});assert.equal(completed.status,200);
+  const secondClaim=await workerCall('/api/worker/jobs/claim',{workerId:'ci-worker'});assert.equal(secondClaim.status,200);const running=(await secondClaim.json()).job;assert.equal(running.status,'running');
+  const completed=await workerCall(`/api/worker/jobs/${job.id}/status`,{leaseId:running.lease.id,status:'completed'});assert.equal(completed.status,200);assert.equal((await completed.json()).status,'completed');
   const quota=await secureFetch(`${base}/api/jobs`,{method:'POST',headers:{'x-csrf-token':csrfToken},body:JSON.stringify(body)});assert.equal(quota.status,429);
   const localRender=await secureFetch(`${base}/api/media/render`,{method:'POST',headers:{'x-csrf-token':csrfToken},body:JSON.stringify({slides:[]})});assert.equal(localRender.status,409);assert.equal((await localRender.json()).error,'cloud_processing_required');  const publish=await secureFetch(`${base}/api/publish/prepare`,{method:'POST',headers:{'x-csrf-token':csrfToken},body:JSON.stringify({explicitApproval:true})});assert.equal(publish.status,409);assert.equal((await publish.json()).published,false);
 });
