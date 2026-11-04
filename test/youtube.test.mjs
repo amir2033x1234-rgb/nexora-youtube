@@ -5,7 +5,14 @@ import os from 'node:os';
 import path from 'node:path';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { createStore } from '../src/store.mjs';
-import { createYouTubeIntegration } from '../src/youtube.mjs';
+import { createYouTubeIntegration, validateRedirectUri } from '../src/youtube.mjs';
+
+test('OAuth redirect accepts cloud HTTPS and local loopback only',()=>{
+  assert.equal(validateRedirectUri('https://studio.example.com/api/youtube/oauth/callback'),'https://studio.example.com/api/youtube/oauth/callback');
+  assert.equal(validateRedirectUri(undefined,4321),'http://127.0.0.1:4321/api/youtube/oauth/callback');
+  assert.equal(validateRedirectUri('http://localhost:3000/api/youtube/oauth/callback'),'http://localhost:3000/api/youtube/oauth/callback');
+  for(const uri of ['http://studio.example.com/api/youtube/oauth/callback','https://studio.example.com/other','https://user:pass@studio.example.com/api/youtube/oauth/callback','https://studio.example.com/api/youtube/oauth/callback?next=/']) assert.throws(()=>validateRedirectUri(uri),/OAuth redirect must use HTTPS/);
+});
 
 test('YouTube OAuth uses one-time state, PKCE, least-privilege read scopes, and encrypted tokens',async t=>{
   const dir=await mkdtemp(path.join(os.tmpdir(),'nexora-oauth-'));

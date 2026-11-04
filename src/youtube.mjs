@@ -12,11 +12,22 @@ const API = 'https://www.googleapis.com/youtube/v3';
 const ANALYTICS = 'https://youtubeanalytics.googleapis.com/v2/reports';
 const b64url = buffer => buffer.toString('base64url');
 
+export function validateRedirectUri(value, port = 3000) {
+  const raw = value || `http://127.0.0.1:${port}/api/youtube/oauth/callback`;
+  let uri;
+  try { uri = new URL(raw); } catch { throw new Error('NEXORA_GOOGLE_REDIRECT_URI must be a valid HTTPS URL or a loopback HTTP URL.'); }
+  const loopback = ['127.0.0.1', 'localhost', '[::1]'].includes(uri.hostname);
+  if ((uri.protocol !== 'https:' && !(uri.protocol === 'http:' && loopback)) || uri.username || uri.password || uri.search || uri.hash || uri.pathname !== '/api/youtube/oauth/callback') {
+    throw new Error('OAuth redirect must use HTTPS on a cloud host (loopback HTTP is allowed for local development) and end exactly with /api/youtube/oauth/callback.');
+  }
+  return uri.toString();
+}
+
 export function createYouTubeIntegration({ store, env = process.env, port = 3000, dataDir = './data', fetchImpl = fetch }) {
   const pending = new Map();
-  const redirectUri = env.NEXORA_GOOGLE_REDIRECT_URI || `http://127.0.0.1:${port}/api/youtube/oauth/callback`;
-  const configured = Boolean(env.NEXORA_GOOGLE_CLIENT_ID && env.NEXORA_TOKEN_ENCRYPTION_KEY);
+  const redirectUri = validateRedirectUri(env.NEXORA_GOOGLE_REDIRECT_URI, port);
   const key = (() => { try { const value=Buffer.from(env.NEXORA_TOKEN_ENCRYPTION_KEY||'','base64'); return value.length===32?value:null; } catch { return null; } })();
+  const configured = Boolean(env.NEXORA_GOOGLE_CLIENT_ID && key);
   function encrypt(value) {
     if(!key) throw new Error('Set NEXORA_TOKEN_ENCRYPTION_KEY to a base64-encoded 32-byte key before connecting YouTube.');
     const iv=randomBytes(12); const cipher=createCipheriv('aes-256-gcm',key,iv); const encrypted=Buffer.concat([cipher.update(JSON.stringify(value),'utf8'),cipher.final()]);
