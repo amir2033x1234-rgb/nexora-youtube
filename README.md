@@ -31,6 +31,7 @@ npm run check
 - Transcript-to-SRT conversion with estimated timing unless timestamps are supplied.
 - Rule-based metadata drafts and editable 1280×720 SVG title-card templates.
 - Production job queue with documented media-rights checks, quality gate, daily quota, and bounded retry.
+- Optional FFmpeg still-image renderer for landscape/vertical videos with licensed images and supplied audio; disabled until the local binary is available.
 - User-entered analytics records.
 - Optional official YouTube read integration: Desktop OAuth with PKCE/state, refresh tokens encrypted at rest, channel/videos, Analytics reports, and the official `mostPopular` chart.
 - Optional zero-cost local model adapter: structured AI script drafts through a user-run Ollama service; no model is downloaded or invoked automatically.
@@ -45,6 +46,7 @@ The dashboard and `/api/status` expose the per-module status and explain limitat
 | Content intelligence, strategy calendar, quotas, recovery, quality scoring, multi-channel, dashboard | IMPLEMENTED | Local foundation; deploy with protected durable storage for shared/cloud use. |
 | Trend research, fact checking, subtitles, thumbnails, SEO, production orchestration | PARTIAL | User-input rules/templates; external data, recognition, and rendering are not connected. |
 | AI script generation | MODEL_REQUIRED until local model configured; then UNTESTED | Set `NEXORA_OLLAMA_MODEL` and run Ollama locally. Inference is a draft and still needs source checking. |
+| Video rendering | PROVIDER_REQUIRED until FFmpeg is configured; then UNTESTED | Produces a still-image edit with user-provided audio; no voice synthesis or generated footage. |
 | YouTube OAuth and read APIs | PROVIDER_REQUIRED until configured and connected; then runtime status is shown | Requires the Google Desktop OAuth client ID and an encryption key in protected environment variables. Real account/API calls still need user-side consent and verification. |
 | Analytics | PARTIAL | User-entered metrics plus an optional live YouTube Analytics query after OAuth; not exercised against the user's channel yet. |
 | YouTube publishing | UNTESTED when upload scope is granted; otherwise PROVIDER_REQUIRED | Session-based upload is implemented but not exercised against a real account. Requires exact-file rights evidence, all quality criteria, explicit approval, and separate public-visibility approval. |
@@ -56,6 +58,8 @@ Never commit `.env`, OAuth client files, tokens, or credentials. `.gitignore` ex
 ## Architecture and next milestones
 
 Local AI is optional: set `NEXORA_OLLAMA_URL` and `NEXORA_OLLAMA_MODEL` to a local Ollama instance/model. It is never contacted when the model is unset. Ollama runs on the user's own machine and uses local compute/storage; model output is not fact-checked automatically. No hosted AI endpoint or paid service is called by the app.
+
+The Studio → Render video tool uses FFmpeg if installed. Put licensed source images and audio in `data/assets` (or configure `NEXORA_ASSET_DIR`), document each license and its proof, then provide slide durations and a landscape or vertical layout. Rendered MP4s go to `data/exports` and can be submitted to the gated YouTube upload form. FFmpeg was not installed in the build environment, so the renderer was verified with a mocked process and the real media encode remains untested.
 
 The dependency-free Node HTTP service uses SQLite for a single-instance prototype and static browser UI. For a cloud-first multi-user launch, the next required milestone is a tested identity and authorization layer, managed relational storage, object storage with lifecycle limits, background workers, and deployment/backup automation—all selected from genuinely free allowances and rechecked before use. Then add provider adapters behind interfaces: validated public trend sources; an optional no-cost model endpoint with explicit quota tracking; speech/media tools that operate only on licensed assets; Google OAuth with state/PKCE, minimal scopes, encrypted token storage and revocation; and YouTube APIs. Do not add paid services without explicit approval. Every integration must have provider-specific tests and a clear `PROVIDER_REQUIRED`/`UNTESTED` status until exercised.
 
