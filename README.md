@@ -32,7 +32,9 @@ npm run check
 - Rule-based metadata drafts and editable 1280×720 SVG title-card templates.
 - Production job queue with documented media-rights checks, quality gate, daily quota, and bounded retry.
 - User-entered analytics records.
-- Publishing safety endpoint that always refuses uploads. No YouTube write API exists.
+- Optional official YouTube read integration: Desktop OAuth with PKCE/state, refresh tokens encrypted at rest, channel/videos, Analytics reports, and the official `mostPopular` chart.
+- Optional zero-cost local model adapter: structured AI script drafts through a user-run Ollama service; no model is downloaded or invoked automatically.
+- Guarded resumable upload endpoint and dashboard form; requires a separate upload scope, an explicit per-video approval, documented rights for the exact export file, a passing quality gate, and defaults to private visibility. Public visibility needs a second approval.
 
 ## Capability status
 
@@ -41,18 +43,22 @@ The dashboard and `/api/status` expose the per-module status and explain limitat
 | Capability | Status | Limit |
 |---|---|---|
 | Content intelligence, strategy calendar, quotas, recovery, quality scoring, multi-channel, dashboard | IMPLEMENTED | Local foundation; deploy with protected durable storage for shared/cloud use. |
-| Trend research, fact checking, scripts, subtitles, thumbnails, SEO, analytics, production orchestration | PARTIAL | User-input based rules/templates; external data, AI, recognition, rendering, or verified metrics are not connected. |
-| Voiceover and YouTube OAuth | PROVIDER_REQUIRED | No provider credentials or adapter is configured. |
-| YouTube publishing | NOT_IMPLEMENTED | No upload code exists; `/api/publish/prepare` returns `published: false` even when approval is supplied. |
+| Trend research, fact checking, subtitles, thumbnails, SEO, production orchestration | PARTIAL | User-input rules/templates; external data, recognition, and rendering are not connected. |
+| AI script generation | MODEL_REQUIRED until local model configured; then UNTESTED | Set `NEXORA_OLLAMA_MODEL` and run Ollama locally. Inference is a draft and still needs source checking. |
+| YouTube OAuth and read APIs | PROVIDER_REQUIRED until configured and connected; then runtime status is shown | Requires the Google Desktop OAuth client ID and an encryption key in protected environment variables. Real account/API calls still need user-side consent and verification. |
+| Analytics | PARTIAL | User-entered metrics plus an optional live YouTube Analytics query after OAuth; not exercised against the user's channel yet. |
+| YouTube publishing | UNTESTED when upload scope is granted; otherwise PROVIDER_REQUIRED | Session-based upload is implemented but not exercised against a real account. Requires exact-file rights evidence, all quality criteria, explicit approval, and separate public-visibility approval. |
 
 ## Safety and rights
 
-Never commit `.env`, OAuth client files, tokens, or credentials. `.gitignore` excludes common secret locations. Store production credentials in a managed secret store, not this repository. The application does not ingest third-party media automatically. Every queued media asset needs a URL/reference, license, proof, and explicit commercial-use permission; the workflow checks these user-submitted fields, but cannot verify the license itself. Obtain rights and preserve attribution. No publishing occurs.
+Never commit `.env`, OAuth client files, tokens, or credentials. `.gitignore` excludes common secret locations. The OAuth token database stores refresh/access tokens encrypted using AES-256-GCM with `NEXORA_TOKEN_ENCRYPTION_KEY`; preserve that key separately or saved authorization cannot be decrypted. Set `NEXORA_GOOGLE_CLIENT_ID` and the encryption key in a protected environment; the client secret is optional and also stays in the environment. For a desktop client, the default callback is `http://127.0.0.1:<PORT>/api/youtube/oauth/callback`; register/configure the matching loopback redirect for the OAuth client. `/api/youtube/oauth/start?mode=read` requests read-only scopes; `mode=publish` adds the YouTube upload scope and is a distinct consent action. PKCE, one-time state, 10-minute expiry, and refresh-token revocation handling are built in. Upload requires exact-file license evidence and commercial rights, a complete passing quality score, explicit per-video approval, and defaults to private. Public visibility requires separate approval. Provider calls have mocks, but live OAuth/API/upload access has not been run here. The application does not ingest third-party media automatically. The rights check validates submitted proof fields, not the underlying license. No video was uploaded.
 
 ## Architecture and next milestones
+
+Local AI is optional: set `NEXORA_OLLAMA_URL` and `NEXORA_OLLAMA_MODEL` to a local Ollama instance/model. It is never contacted when the model is unset. Ollama runs on the user's own machine and uses local compute/storage; model output is not fact-checked automatically. No hosted AI endpoint or paid service is called by the app.
 
 The dependency-free Node HTTP service uses SQLite for a single-instance prototype and static browser UI. For a cloud-first multi-user launch, the next required milestone is a tested identity and authorization layer, managed relational storage, object storage with lifecycle limits, background workers, and deployment/backup automation—all selected from genuinely free allowances and rechecked before use. Then add provider adapters behind interfaces: validated public trend sources; an optional no-cost model endpoint with explicit quota tracking; speech/media tools that operate only on licensed assets; Google OAuth with state/PKCE, minimal scopes, encrypted token storage and revocation; and YouTube APIs. Do not add paid services without explicit approval. Every integration must have provider-specific tests and a clear `PROVIDER_REQUIRED`/`UNTESTED` status until exercised.
 
 ## Current deployment boundary
 
-This milestone is source-verified and locally testable. It has not been deployed to Google Cloud; no cloud project or API state was queried. No OAuth handshake, live trend lookup, AI inference, image/audio/video generation, YouTube analytics fetch, upload, or device-specific browser verification has been performed.
+This milestone is source-verified and locally testable. It has not been deployed to Google Cloud; no cloud project or API state was queried. No real OAuth handshake, live channel API access, AI inference, image/audio/video generation, YouTube analytics fetch, upload, or device-specific browser verification has been performed.

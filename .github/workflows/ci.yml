@@ -17,5 +17,5 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: node --check server.mjs && node --check src/domain.mjs && node --check src/store.mjs && node --check public/app.js
+      - run: node --check server.mjs && node --check src/domain.mjs && node --check src/store.mjs && node --check src/youtube.mjs && node --check src/ollama.mjs && node --check public/app.js
       - run: node --test

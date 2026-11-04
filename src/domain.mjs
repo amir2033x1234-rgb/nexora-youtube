@@ -12,7 +12,7 @@ export const capabilities = [
   { id: 'thumbnails', name: 'Thumbnails', status: 'PARTIAL', detail: 'Produces an editable SVG title-card template, not generated photography.' },
   { id: 'seo-metadata', name: 'SEO and metadata', status: 'PARTIAL', detail: 'Creates editable metadata suggestions from supplied facts and keywords.' },
   { id: 'youtube-oauth', name: 'YouTube OAuth', status: 'PROVIDER_REQUIRED', detail: 'OAuth credentials and callback verification are not configured.' },
-  { id: 'youtube-publishing', name: 'YouTube publishing', status: 'NOT_IMPLEMENTED', detail: 'No YouTube API write calls exist; approval alone cannot publish.' },
+  { id: 'youtube-publishing', name: 'YouTube publishing', status: 'PROVIDER_REQUIRED', detail: 'A guarded upload adapter exists; grant the separate YouTube upload scope and pass every approval, rights, and quality gate.' },
   { id: 'analytics', name: 'Analytics', status: 'PARTIAL', detail: 'Stores user-entered metrics; YouTube Analytics API is not connected.' },
   { id: 'resource-quotas', name: 'Resource quotas', status: 'IMPLEMENTED', detail: 'Enforces a configurable daily limit on production jobs.' },
   { id: 'recovery', name: 'Failure recovery', status: 'IMPLEMENTED', detail: 'Persists job state and supports bounded, idempotent retries.' },
