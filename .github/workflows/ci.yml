@@ -20,3 +20,29 @@ jobs:
       - run: node --check server.mjs && node --check src/auth.mjs && node --check src/domain.mjs && node --check src/store.mjs && node --check src/youtube.mjs && node --check src/ollama.mjs && node --check src/media.mjs && node --check public/app.js
       - run: node --test
       - run: docker build --tag nexora-youtube-ai:ci .
+      - name: Smoke test the container security boundary
+        run: |
+          docker run --detach --rm --name nexora-ci -p 127.0.0.1:3900:3000 -e NEXORA_ADMIN_USERNAME=ci -e NEXORA_ADMIN_PASSWORD=ci-smoke-test-password-42 nexora-youtube-ai:ci
+          trap 'docker stop nexora-ci >/dev/null 2>&1 || true' EXIT
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          const base = 'http://127.0.0.1:3900';
+          let healthy = false;
+          for (let attempt = 0; attempt < 30; attempt++) {
+            try { healthy = (await fetch(`${base}/api/health`)).ok; } catch {}
+            if (healthy) break;
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+          assert.equal(healthy, true, 'container health endpoint did not become ready');
+          assert.equal((await fetch(`${base}/api/status`)).status, 401, 'private API must require login');
+          const login = await fetch(`${base}/api/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: 'ci', password: 'ci-smoke-test-password-42' }) });
+          assert.equal(login.status, 200);
+          assert.match(login.headers.get('set-cookie') || '', /HttpOnly/);
+          assert.match(login.headers.get('set-cookie') || '', /Secure/);
+          const { csrfToken } = await login.json();
+          const cookie = login.headers.get('set-cookie').split(';')[0];
+          assert.equal((await fetch(`${base}/api/status`, { headers: { cookie } })).status, 200);
+          assert.equal((await fetch(`${base}/api/channels`, { method: 'POST', headers: { cookie, 'content-type': 'application/json' }, body: '{}' })).status, 403, 'writes must require CSRF');
+          assert.equal((await fetch(`${base}/api/channels`, { method: 'POST', headers: { cookie, 'content-type': 'application/json', 'x-csrf-token': csrfToken }, body: JSON.stringify({ name: 'CI smoke' }) })).status, 201);
+          NODE
+
