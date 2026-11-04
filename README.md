@@ -54,7 +54,7 @@ The dashboard and `/api/status` expose the per-module status and explain limitat
 | Trend research | PARTIAL | Google Trends supplies current Google Search signals and related news. YouTube competition, audience fit, opportunity, and forecast are not inferred without evidence. |
 | YouTube competitor sample | PROVIDER_REQUIRED until read OAuth is connected; then UNTESTED | Official public video search sample, capped to five user-initiated searches per UTC day. A sample is not total competition or audience demand. |
 | Fact checking, subtitles, thumbnails, SEO, production orchestration | PARTIAL | User-input rules/templates; source verification, speech recognition, generated imagery, and full production remain disconnected. |
-| AI script generation | MODEL_REQUIRED until local model configured; then UNTESTED | Set `NEXORA_OLLAMA_MODEL` and run Ollama locally. Inference is a draft and still needs source checking. |
+| AI script generation | MODEL_REQUIRED until a model is named; PROVIDER_REQUIRED until an approved remote HTTPS endpoint is configured; then UNTESTED | Laptop/loopback inference is blocked. Confirm the remote host's free quota before use. Inference is a draft and needs source checking. |
 | Video rendering | PROVIDER_REQUIRED until FFmpeg is configured; then UNTESTED | Produces a still-image edit with user-provided audio; no voice synthesis or generated footage. |
 | YouTube OAuth and read APIs | PROVIDER_REQUIRED until configured and connected; then runtime status is shown | Requires the Google Desktop OAuth client ID and an encryption key in protected environment variables. Real account/API calls still need user-side consent and verification. |
 | YouTube playlist and metadata management | PROVIDER_REQUIRED until management scope is granted; then UNTESTED | Broad channel management permission is requested only through a distinct consent button; each write is explicitly approved. |
@@ -67,7 +67,7 @@ Never commit `.env`, OAuth client files, tokens, or credentials. `.gitignore` ex
 
 ## Architecture and next milestones
 
-AI inference is optional and disabled until both `NEXORA_OLLAMA_URL` and `NEXORA_OLLAMA_MODEL` are configured. To comply with the project constraint, do not point this adapter at the user's laptop; use only an explicitly approved cloud-hosted provider with a verified free quota, or leave it disabled. Model output is a draft and is not automatically fact-checked. No hosted AI endpoint or paid service is called by the app by default.
+AI inference is optional and disabled until both `NEXORA_OLLAMA_URL` and `NEXORA_OLLAMA_MODEL` are configured. The adapter rejects HTTP, loopback, and localhost endpoints so project inference cannot run on the user's laptop. Only configure a remote HTTPS provider after its zero-cost quota and data handling are verified; otherwise leave it disabled. Model output is a draft and is not automatically fact-checked. No hosted AI endpoint or paid service is called by the app by default.
 
 The Studio → Render video tool uses FFmpeg if installed. Put licensed source images and audio in `data/assets` (or configure `NEXORA_ASSET_DIR`), document each license and its proof, then provide slide durations and a landscape or vertical layout. Rendered MP4s go to `data/exports` and can be submitted to the gated YouTube upload form. FFmpeg was not installed in the build environment, so the renderer was verified with a mocked process and the real media encode remains untested.
 
