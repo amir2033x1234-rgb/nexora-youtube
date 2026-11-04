@@ -1,0 +1,13 @@
+{
+  "name": "nexora-youtube-ai",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Cost-free, evidence-first foundation for a YouTube content studio.",
+  "engines": { "node": ">=22.13" },
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test",
+    "check": "node --check server.mjs && node --check src/domain.mjs && node --check src/store.mjs && node --check public/app.js"
+  }
+}

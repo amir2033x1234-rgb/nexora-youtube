@@ -1,0 +1,21 @@
+name: Verify NEXORA foundation
+
+on:
+  push:
+    branches: [main, "codex/**"]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node --check server.mjs && node --check src/domain.mjs && node --check src/store.mjs && node --check public/app.js
+      - run: node --test

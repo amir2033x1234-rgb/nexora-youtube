@@ -1,0 +1,14 @@
+.env
+.env.*
+!.env.example
+*.sqlite
+*.sqlite-*
+data/
+secrets/
+tokens.json
+token.json
+credentials.json
+client_secret*.json
+node_modules/
+coverage/
+.DS_Store
