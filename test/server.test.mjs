@@ -17,7 +17,7 @@ test('HTTP app persists records, enforces rights and never publishes',async t=>{
   if(!ready && /EACCES|EPERM|operation not permitted/i.test(`${startupError} ${connectError}`)) { t.skip(`server process or loopback binding is blocked by the execution environment: ${startupError} ${connectError}`.trim()); return; }
   assert.equal(ready,true,`server starts${startupError||connectError?`: ${startupError} ${connectError}`:''}`);
   const status=await fetch(`${base}/api/status`).then(r=>r.json());assert.equal(status.publishing.enabled,false);
-  const body={topic:'Test topic',channelId:'default',assets:[{url:'licensed',license:'CC BY',proof:'license page',commercialUse:true}],quality:Object.fromEntries(['originality','storytelling','visualQuality','audioQuality','editingQuality','factualAccuracy','subtitleQuality','thumbnailQuality','audienceValue','copyrightCompliance'].map(k=>[k,90]))};
+  const body={topic:'Test topic',channelId:'default',assets:[{url:'licensed',license:'CC BY',proof:'license page',commercialUse:true}],quality:Object.fromEntries(['originality','storytelling','visualQuality','audioQuality','editingQuality','factualAccuracy','subtitleQuality','thumbnailQuality','audienceValue','copyrightCompliance'].map((k,i)=>[k,i===9?100:90]))};
   const queued=await fetch(`${base}/api/jobs`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});assert.equal(queued.status,202);const job=await queued.json();
   const retry=await fetch(`${base}/api/jobs/${job.id}/retry`,{method:'POST'});assert.equal(retry.status,202);
   const quota=await fetch(`${base}/api/jobs`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});assert.equal(quota.status,429);
