@@ -35,7 +35,7 @@ Build with `docker build -t nexora-youtube-ai .`. Run behind a TLS reverse proxy
 - Claim evidence ledger (does not fetch, authenticate, or independently validate sources).
 - Transcript-to-SRT conversion with estimated timing unless timestamps are supplied.
 - Rule-based metadata drafts and editable 1280×720 SVG title-card templates.
-- Production job queue with documented media-rights checks, quality gate, daily quota, and bounded retry.
+- Rights-checked job queue with worker-facing `queued → running → completed/failed` transitions, daily quota, and retry only after a recorded failure; no cloud worker is configured.
 - Optional FFmpeg still-image renderer for landscape/vertical videos with licensed images and supplied audio; disabled until a cloud-hosted render runtime is configured.
 - User-entered analytics records.
 - Optional official YouTube read integration: Desktop OAuth with PKCE/state, refresh tokens encrypted at rest, channel/videos, Analytics reports, and the official `mostPopular` chart.
@@ -44,6 +44,10 @@ Build with `docker build -t nexora-youtube-ai .`. Run behind a TLS reverse proxy
 - YouTube playlist listing and creation plus existing-video metadata updates use a separate broad management OAuth scope. Each write requires explicit confirmation; public playlists require separate visibility approval.
 - Optional administrator login with CSRF protection, HttpOnly cookies, password hashing, a login throttle, logout, and security headers.
 
+
+### Worker handoff
+
+`GET /api/jobs?channelId=<id>` lists queued work for a channel. A trusted worker can set a queued job to `running`, then to `completed` or `failed` with `POST /api/jobs/<job-id>/status`; only failed jobs can be retried, up to three times. These protected endpoints define the state contract only. NEXORA does not include or automatically start a cloud worker.
 ## Capability status
 
 The dashboard and `/api/status` expose the per-module status and explain limitations. `IMPLEMENTED` describes local functionality only. It does not imply connected provider or cloud runtime verification.
@@ -76,4 +80,3 @@ The dependency-free Node HTTP service uses SQLite for a single-instance prototyp
 ## Current deployment boundary
 
 This milestone is source-verified and locally testable. It has not been deployed to Google Cloud; no cloud project or API state was queried. No real OAuth handshake, live channel API access, AI inference, image/audio/video generation, YouTube analytics fetch, upload, or device-specific browser verification has been performed.
-

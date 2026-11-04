@@ -7,7 +7,7 @@ export const capabilities = [
   { id: 'strategy-calendar', name: 'Strategy and calendar', status: 'IMPLEMENTED', detail: 'Plans channel-specific content and scheduling dates.' },
   { id: 'script-generator', name: 'Script generator', status: 'PARTIAL', detail: 'Creates structured outlines from user inputs; language model provider is not connected.' },
   { id: 'voiceover', name: 'Voiceover', status: 'PROVIDER_REQUIRED', detail: 'No text-to-speech provider is configured.' },
-  { id: 'video-production', name: 'Video production', status: 'PARTIAL', detail: 'Rights-aware production jobs can be queued; rendering provider is not connected.' },
+  { id: 'video-production', name: 'Video production', status: 'PARTIAL', detail: 'Rights-aware jobs can be queued and moved through worker-facing states; no cloud worker is configured to execute them.' },
   { id: 'subtitles', name: 'Subtitles', status: 'PARTIAL', detail: 'Converts a supplied transcript into timed SRT; speech recognition is not connected.' },
   { id: 'thumbnails', name: 'Thumbnails', status: 'PARTIAL', detail: 'Produces an editable SVG title-card template, not generated photography.' },
   { id: 'seo-metadata', name: 'SEO and metadata', status: 'PARTIAL', detail: 'Creates editable metadata suggestions from supplied facts and keywords.' },
@@ -15,7 +15,7 @@ export const capabilities = [
   { id: 'youtube-publishing', name: 'YouTube publishing', status: 'PROVIDER_REQUIRED', detail: 'A guarded upload adapter exists; grant the separate YouTube upload scope and pass every approval, rights, and quality gate.' },
   { id: 'analytics', name: 'Analytics', status: 'PARTIAL', detail: 'Stores user-entered metrics; YouTube Analytics API is not connected.' },
   { id: 'resource-quotas', name: 'Resource quotas', status: 'IMPLEMENTED', detail: 'Enforces a configurable daily limit on production jobs.' },
-  { id: 'recovery', name: 'Failure recovery', status: 'IMPLEMENTED', detail: 'Persists job state and supports bounded, idempotent retries.' },
+  { id: 'recovery', name: 'Failure recovery', status: 'PARTIAL', detail: 'Persists worker status and allows bounded retry only after a recorded failure; no automatic worker recovery is configured.' },
   { id: 'quality', name: 'Quality scoring', status: 'IMPLEMENTED', detail: 'Scores explicit checklist inputs and blocks jobs below the quality threshold.' },
   { id: 'multi-channel', name: 'Multi-channel', status: 'IMPLEMENTED', detail: 'Channels keep separate language, audience, brand, and cadence settings.' },
   { id: 'dashboard', name: 'Dashboard', status: 'IMPLEMENTED', detail: 'Displays persisted application and workflow state.' }
