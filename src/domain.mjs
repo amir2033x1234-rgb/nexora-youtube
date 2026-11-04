@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 export const capabilities = [
-  { id: 'trend-research', name: 'Trend research', status: 'PARTIAL', detail: 'Scores topics submitted with evidence; no live trend feed is connected.' },
+  { id: 'trend-research', name: 'Trend research', status: 'PARTIAL', detail: 'Fetches and scores public Google Trends RSS search signals on request; YouTube competition, audience fit, and forecasts remain unknown without evidence.' },
   { id: 'content-intelligence', name: 'Content intelligence', status: 'IMPLEMENTED', detail: 'Stores searchable channels, topics, scripts, jobs, sources, and metrics locally.' },
   { id: 'fact-checking', name: 'Fact checking', status: 'PARTIAL', detail: 'Evidence ledger flags unsupported claims; it does not independently verify truth.' },
   { id: 'strategy-calendar', name: 'Strategy and calendar', status: 'IMPLEMENTED', detail: 'Plans channel-specific content and scheduling dates.' },

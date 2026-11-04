@@ -75,6 +75,40 @@ export function createYouTubeIntegration({ store, env = process.env, port = 3000
     const q=new URLSearchParams({part:'snippet,contentDetails,status',playlistId:uploads,maxResults:String(Math.max(1,Math.min(50,Number(maxResults)||25)))}); if(pageToken) q.set('pageToken',pageToken);
     const data=await api(`${API}/playlistItems?${q}`); return {items:(data.items||[]).map(x=>({id:x.contentDetails?.videoId,title:x.snippet?.title,publishedAt:x.contentDetails?.videoPublishedAt||x.snippet?.publishedAt,thumbnail:x.snippet?.thumbnails?.medium?.url})),nextPageToken:data.nextPageToken||null,channel:channels[0]};
   }
+  async function researchVideos({query,regionCode='US',publishedAfter,maxResults=15,order='relevance'}={}) {
+    const q=String(query||'').trim();
+    if(q.length<2||q.length>100)throw new Error('Research query must be 2–100 characters.');
+    const region=String(regionCode||'US').toUpperCase();
+    if(!/^[A-Z]{2}$/.test(region))throw new Error('regionCode must be a two-letter country or region code.');
+    if(!['relevance','date','viewCount'].includes(order))throw new Error('order must be relevance, date, or viewCount.');
+    if(publishedAfter&&(!Number.isFinite(Date.parse(publishedAfter))||Date.parse(publishedAfter)>Date.now()))throw new Error('publishedAfter must be a valid past date.');
+    const normalizedAfter=publishedAfter?new Date(publishedAfter).toISOString():'';
+    const cacheId=createHash('sha256').update(`${q.toLocaleLowerCase()}|${region}|${normalizedAfter}|${order}|${Math.max(5,Math.min(25,Number(maxResults)||15))}`).digest('hex').slice(0,24);
+    const cached=store.get('youtube_research_cache',cacheId);
+    if(cached&&Date.now()-Date.parse(cached.fetchedAt)<10*60*1000)return {...cached,cached:true};
+    const dayStart=new Date();dayStart.setUTCHours(0,0,0,0);
+    const limit=5;
+    if(store.countSince('youtube_search_requests',dayStart.toISOString())>=limit)throw new Error(`Daily YouTube research limit reached (${limit} searches). Try again after UTC midnight.`);
+    const params=new URLSearchParams({part:'snippet',type:'video',q,regionCode:region,maxResults:String(Math.max(5,Math.min(25,Number(maxResults)||15))),order});
+    if(normalizedAfter)params.set('publishedAfter',normalizedAfter);
+    const search=await api(`${API}/search?${params}`,READ_SCOPES[0]);
+    store.put('youtube_search_requests',{id:randomBytes(12).toString('hex'),createdAt:new Date().toISOString(),query:q,regionCode:region});
+    const ids=(search.items||[]).map(item=>item.id?.videoId).filter(Boolean).slice(0,25);
+    const details=ids.length?await api(`${API}/videos?${new URLSearchParams({part:'snippet,statistics,contentDetails',id:ids.join(',')})}`,READ_SCOPES[0]):{items:[]};
+    const now=Date.now();
+    const items=(details.items||[]).map(video=>{
+      const views=Number(video.statistics?.viewCount);const published=Date.parse(video.snippet?.publishedAt||'');
+      const ageDays=Number.isFinite(published)?Math.max(1/24,(now-published)/86_400_000):null;
+      return {id:video.id,title:video.snippet?.title||'',channelTitle:video.snippet?.channelTitle||'',channelId:video.snippet?.channelId||null,publishedAt:video.snippet?.publishedAt||null,views:Number.isFinite(views)?views:null,likes:video.statistics?.likeCount==null?null:Number(video.statistics.likeCount),viewsPerDay:Number.isFinite(views)&&ageDays?Math.round(views/ageDays):null,duration:video.contentDetails?.duration||null,url:`https://www.youtube.com/watch?v=${encodeURIComponent(video.id)}`};
+    });
+    const viewRates=items.map(item=>item.viewsPerDay).filter(Number.isFinite).sort((a,b)=>a-b);
+    const viewCounts=items.map(item=>item.views).filter(Number.isFinite).sort((a,b)=>a-b);
+    const median=values=>values.length?(values.length%2?values[Math.floor(values.length/2)]:Math.round((values[values.length/2-1]+values[values.length/2])/2)):null;
+    const result={query:q,regionCode:region,order,source:'YouTube Data API search.list + videos.list',fetchedAt:new Date().toISOString(),cached:false,quotaPolicy:{applicationSearchesUsedToday:store.countSince('youtube_search_requests',dayStart.toISOString()),applicationDailyLimit:limit},sampleSize:items.length,approximateSearchResultCount:search.pageInfo?.totalResults??null,medianViews:median(viewCounts),medianViewsPerDay:median(viewRates),items,note:'A recent public-video sample for competitive context only. Search rank and sample metrics are not total market size, audience demand, or a prediction.'};
+    store.put('youtube_research_cache',{...result,id:cacheId,createdAt:result.fetchedAt});
+    store.record('youtube_market_research',{query:q,regionCode:region,sampleSize:items.length,fetchedAt:result.fetchedAt});
+    return result;
+  }
   async function playlists(pageToken='') {
     const q=new URLSearchParams({part:'snippet,status',mine:'true',maxResults:'50'});if(pageToken)q.set('pageToken',pageToken);
     const data=await api(`${API}/playlists?${q}`);return {items:data.items||[],nextPageToken:data.nextPageToken||null};
@@ -127,5 +161,5 @@ export function createYouTubeIntegration({ store, env = process.env, port = 3000
     return {videoId:result.id,url:result.id?`https://www.youtube.com/watch?v=${encodeURIComponent(result.id)}`:null,privacyStatus,uploaded:true,approvalRecorded:true,qualityScore:score.score,createdAt:new Date().toISOString()};
   }
   async function disconnect() { store.delete('secrets','youtube_tokens'); return {connected:false}; }
-  return { status, start, callback, channel, videos, playlists, createPlaylist, updateVideo, analytics, popular, upload, disconnect, accessToken, api, scopes:{read:READ_SCOPES,manage:MANAGE_SCOPE,upload:UPLOAD_SCOPE} };
+  return { status, start, callback, channel, videos, researchVideos, playlists, createPlaylist, updateVideo, analytics, popular, upload, disconnect, accessToken, api, scopes:{read:READ_SCOPES,manage:MANAGE_SCOPE,upload:UPLOAD_SCOPE} };
 }

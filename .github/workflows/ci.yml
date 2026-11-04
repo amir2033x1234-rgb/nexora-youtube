@@ -17,7 +17,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: node --check server.mjs && node --check src/auth.mjs && node --check src/domain.mjs && node --check src/store.mjs && node --check src/youtube.mjs && node --check src/ollama.mjs && node --check src/media.mjs && node --check public/app.js
+      - run: node --check server.mjs && node --check src/auth.mjs && node --check src/domain.mjs && node --check src/store.mjs && node --check src/trends.mjs && node --check src/youtube.mjs && node --check src/ollama.mjs && node --check src/media.mjs && node --check public/app.js
       - run: node --test
       - run: docker build --tag nexora-youtube-ai:ci .
       - name: Smoke test the container security boundary
@@ -45,4 +45,3 @@ jobs:
           assert.equal((await fetch(`${base}/api/channels`, { method: 'POST', headers: { cookie, 'content-type': 'application/json' }, body: '{}' })).status, 403, 'writes must require CSRF');
           assert.equal((await fetch(`${base}/api/channels`, { method: 'POST', headers: { cookie, 'content-type': 'application/json', 'x-csrf-token': csrfToken }, body: JSON.stringify({ name: 'CI smoke' }) })).status, 201);
           NODE
-

@@ -50,6 +50,29 @@ test('channel management scope is optional and playlist creation and metadata up
   const write=calls.find(x=>x.method==='PUT');const body=JSON.parse(write.body);assert.equal(body.snippet.categoryId,'27');assert.equal(body.snippet.description,'Keep intact');assert.deepEqual(body.snippet.tags,['old']);
 });
 
+test('YouTube research fetches official public competitor samples and enforces a five-search daily cap',async t=>{
+  const dir=await mkdtemp(path.join(os.tmpdir(),'nexora-youtube-research-'));
+  const store=createStore(dir);t.after(async()=>{store.close();await rm(dir,{recursive:true,force:true})});
+  const scopes='https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/yt-analytics.readonly';
+  let searchCalls=0;const urls=[];
+  const fetchImpl=async(url)=>{
+    urls.push(String(url));
+    if(url==='https://oauth2.googleapis.com/token')return new Response(JSON.stringify({access_token:'research-access',refresh_token:'research-refresh',expires_in:3600,scope:scopes}),{status:200});
+    if(String(url).includes('/search?')){searchCalls++;return new Response(JSON.stringify({pageInfo:{totalResults:50000},items:[{id:{videoId:'videoaaaaaa1'}},{id:{videoId:'videobbbbbb2'}}]}),{status:200});}
+    if(String(url).includes('/videos?'))return new Response(JSON.stringify({items:[{id:'videoaaaaaa1',snippet:{title:'Recent example',channelTitle:'Channel A',channelId:'chan-a',publishedAt:new Date(Date.now()-86_400_000).toISOString()},statistics:{viewCount:'100'},contentDetails:{duration:'PT5M'}},{id:'videobbbbbb2',snippet:{title:'Another example',channelTitle:'Channel B',channelId:'chan-b',publishedAt:new Date(Date.now()-2*86_400_000).toISOString()},statistics:{viewCount:'400'},contentDetails:{duration:'PT8M'}}]}),{status:200});
+    throw new Error(`Unexpected request ${url}`);
+  };
+  const yt=createYouTubeIntegration({store,env:{NEXORA_GOOGLE_CLIENT_ID:'client',NEXORA_TOKEN_ENCRYPTION_KEY:Buffer.alloc(32,4).toString('base64')},fetchImpl});
+  const consent=new URL(yt.start('read'));await yt.callback({code:'research-code',state:consent.searchParams.get('state')});
+  const after=new Date(Date.now()-30*86_400_000).toISOString();
+  const result=await yt.researchVideos({query:'renewable energy',regionCode:'US',publishedAfter:after,maxResults:15});
+  assert.equal(result.sampleSize,2);assert.equal(result.approximateSearchResultCount,50000);assert.equal(result.medianViews,250);assert.equal(result.medianViewsPerDay,150);assert.equal(result.quotaPolicy.applicationSearchesUsedToday,1);assert.match(urls.find(x=>x.includes('/search?')),/type=video/);assert.match(urls.find(x=>x.includes('/search?')),/publishedAfter=/);
+  const cached=await yt.researchVideos({query:'RENEWABLE ENERGY',regionCode:'us',publishedAfter:after,maxResults:15});assert.equal(cached.cached,true);assert.equal(searchCalls,1);
+  for(let i=0;i<4;i++)await yt.researchVideos({query:`renewable ${i}`});
+  await assert.rejects(()=>yt.researchVideos({query:'sixth request'}),/Daily YouTube research limit/);assert.equal(searchCalls,5);
+  await assert.rejects(()=>yt.researchVideos({query:'x'}),/2–100 characters/);
+});
+
 test('upload requires explicit approval, exact licensed export, quality, upload scope, and defaults private',async t=>{
   const dir=await mkdtemp(path.join(os.tmpdir(),'nexora-upload-'));
   const store=createStore(dir); t.after(async()=>{store.close();await rm(dir,{recursive:true,force:true})});
